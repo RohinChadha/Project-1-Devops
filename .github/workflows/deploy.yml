@@ -5,37 +5,33 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      - name: Build and Push
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/flask-app:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Amazon Linux EC2
+      - name: Deploy to Amazon Linux
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }} # Must be 'ec2-user' in GitHub Secrets
+          username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Clean up old containers to prevent port conflicts
-            docker stop my-app || true
-            docker rm my-app || true
-            
-            # Pull the fresh image from Docker Hub
-            docker pull ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
-            
-            # Run the container mapping Port 80 to your App Port (5000 or 8000)
-            docker run -d --name my-app -p 80:5000 ${{ secrets.DOCKER_USERNAME }}/flask-app:latest
+            # 1. Navigate to app folder or create it
+            mkdir -p ~/my-flask-app
+            cd ~/my-flask-app
+
+            # 2. If git isn't initialized, clone. If it is, pull latest.
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
+
+            # 3. Build the Docker image locally on the EC2
+            docker build -t local-flask-app .
+
+            # 4. Stop and remove old container
+            docker stop flask-container || true
+            docker rm flask-container || true
+
+            # 5. Run the new container
+            docker run -d --name flask-container -p 80:5000 local-flask-app
