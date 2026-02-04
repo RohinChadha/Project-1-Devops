@@ -34,4 +34,4 @@ jobs:
 
             # 3. The FIX: Map Host Port 80 to Container Port 5000
             # This allows you to visit the site without typing :5000
-            docker run -d --name flask-container -p 80:5000 local-flask-app
+            docker run -d --name flask-container -p 5000:5000 local-flask-app
